@@ -4,6 +4,26 @@ from wordpress_xmlrpc import Client, WordPressPost
 from wordpress_xmlrpc.methods.posts import GetPosts, NewPost
 from wordpress_xmlrpc.methods.users import GetUserInfo
 
+
+def is_mv(title):
+    mv_words = ["MV", "M/V", "MUSIC VIDEO"]
+    not_words = ["TEASER", "TRAILER"]
+
+    title = title.upper()
+
+    for mv_word in mv_words:
+        if mv_word in title:
+
+            for not_word in not_words:
+                if not_word in title:
+                    return False
+            
+            return True
+
+    return False
+
+
+
 sec_filename = "./.secret/secrets"
 sec_file = open(sec_filename, "r")
 sec = json.load(sec_file)
@@ -48,27 +68,30 @@ try:
         etag_file.write(etag)
         etag_file.close()
 
+        #for playlistitem in data["items"]:
         playlistitem = data["items"][0]
+        title = playlistitem["snippet"]["title"]
         videoid = playlistitem["snippet"]["resourceId"]["videoId"]
 
-        wp = Client(endpoint, username, password)
-
-        post = WordPressPost()
-        post.title = playlistitem["snippet"]["title"]
-        content = '<iframe width="560" height="315" src="https://www.youtube.com/embed/{}" frameborder="0" allowfullscreen></iframe>'.format(videoid)
-        content += "\n\n"
-        content += playlistitem["snippet"]["description"]
-        post.content = content
-        #thumbnail at playlistitem["snippet"]["thumbnails"]["default"]["url"]
-        post.terms_names = {
+        #check if video is an mv first before posting
+        if (is_mv(title)):
+            wp = Client(endpoint, username, password)
+            post = WordPressPost()
+        
+            post.title = playlistitem["snippet"]["title"]
+            content = '<iframe width="560" height="315" src="https://www.youtube.com/embed/{}" frameborder="0" allowfullscreen></iframe>'.format(videoid)
+            content += "\n\n"
+            content += playlistitem["snippet"]["description"]
+            post.content = content
+            #thumbnail at playlistitem["snippet"]["thumbnails"]["default"]["url"]
+            post.terms_names = {
                 "post_tag": ["test", "post"],  #todo: parse title to get tags?
                 "category": ["MV"]
-                }
-        post.post_status = "publish"
-
-        wp.call(NewPost(post))
-        
-        print "post published"
+            }
+            post.post_status = "publish"
+            
+            wp.call(NewPost(post))
+            print "post published"
 
 except urllib2.HTTPError, err:
     if (err.code == 404):
@@ -78,7 +101,7 @@ except urllib2.HTTPError, err:
     elif (err.code == 304):
         print "data not modified since last etag"
     else:
-        print "Something happened! Error code", err.code
+        print "Something happened!", err
 except urllib2.URLError, err:
     print "urllib2.URLError:", err.reason
 except Exception, e:
